@@ -1,0 +1,27 @@
+{
+
+  "grass":    { "color": [0, 128, 0], "time": 0.0, "value": 0, "weight": 1.0, "min_depth": 0, "description": "Surface grass, non-mineable"},
+  "dirt":     { "color": [139, 69, 19], "time": 0.5, "value": 1, "weight": 1.0, "min_depth": 0, "description": "Common dirt block"},
+
+  "stone":    { "color": [128, 128, 128], "time": 1.5, "value": 2, "weight": 1.0, "min_depth": 10, "description": "Common stone block"},
+  "coal":     { "color": [20, 20, 20], "time": 1.0, "value": 5, "weight": 0.5, "min_depth": 10, "description": "Common coal ore"},
+  "copper":   { "color": [184, 115, 51], "time": 1.8, "value": 8, "weight": 0.4, "min_depth": 20, "description": "Copper ore"},
+  "tin":      { "color": [112, 128, 144], "time": 2.0, "value": 10, "weight": 0.3, "min_depth": 30, "description": "Tin ore"},
+  "iron":     { "color": [192, 192, 192], "time": 2.5, "value": 15, "weight": 0.3, "min_depth": 50, "description": "Iron ore"},
+  "silver":   { "color": [180, 180, 180], "time": 3.0, "value": 25, "weight": 0.2, "min_depth": 70, "description": "Silver ore"},
+
+  "gold":     { "color": [255, 215, 0], "time": 4.0, "value": 50, "weight": 0.15, "min_depth": 100, "description": "Gold ore"},
+  "sapphire": { "color": [0, 102, 204], "time": 5.0, "value": 100, "weight": 0.12, "min_depth": 150, "description": "Sapphire gem"},
+  "ruby":     { "color": [204, 0, 51], "time": 5.5, "value": 120, "weight": 0.10, "min_depth": 180, "description": "Ruby gem"},
+  "emerald":  { "color": [0, 204, 102], "time": 6.0, "value": 150, "weight": 0.08, "min_depth": 200, "description": "Emerald gem"},
+  "amethyst": { "color": [153, 51, 204], "time": 6.5, "value": 200, "weight": 0.06, "min_depth": 250, "description": "Amethyst gem"},
+  "platinum": { "color": [229, 228, 226], "time": 8.0, "value": 300, "weight": 0.04, "min_depth": 300, "description": "Platinum ore"},
+  "mithril":  { "color": [135, 206, 235], "time": 10.0, "value": 500, "weight": 0.03, "min_depth": 400, "description": "Rare mithril ore"},
+
+  "diamond":  { "color": [185, 242, 255], "time": 12.0, "value": 1000, "weight": 0.02, "min_depth": 1000, "description": "Extremely rare diamond ore"},
+
+  "cave_wall":    { "color": [105, 105, 105], "time": 2.0, "value": 5, "weight": 0.0, "min_depth": 10, "description": "Cave wall, spawns in caves"},
+  "crystal_wall": { "color": [0, 255, 255], "time": 3.0, "value": 10, "weight": 0.0, "min_depth": 300, "description": "Crystal wall in Crystal Cavern"},
+  "unstable":     { "color": [100, 100, 100], "time": 1.0, "value": 0, "weight": 0.0, "min_depth": 50, "description": "Unstable block, collapses when exposed"},
+  "empty":        { "color": [60, 60, 60], "time": 0.0, "value": 0, "weight": 0.0, "min_depth": 0, "description": "Empty space, non-mineable"}
+}

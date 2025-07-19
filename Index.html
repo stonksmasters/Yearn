@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Roguelike</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+</head>
+<body>
+    <h1>Simple Roguelike</h1>
+    <div id="output"></div>
+    <script>
+        async function main() {
+            // Initialize Pyodide
+            let pyodide = await loadPyodide();
+            await pyodide.loadPackage("pygame");
+
+            // Fetch and run the Python code
+            let pythonCode = await fetch("roguelike.py").then(response => response.text());
+            await pyodide.runPythonAsync(pythonCode);
+        }
+        main();
+    </script>
+</body>
+</html>

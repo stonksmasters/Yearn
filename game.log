@@ -1,0 +1,14 @@
+2025-07-16 20:30:05,701 - DEBUG - Initialized UI
+2025-07-16 20:30:05,710 - INFO - Starting game loop
+2025-07-16 21:07:29,391 - INFO - Initializing main.py, writing to C:\Users\johnb\Code\Roguelike\game.log
+2025-07-16 21:07:30,082 - INFO - Found C:\Users\johnb\Code\Roguelike\src\main.py, last modified: Wed Jul 16 15:59:03 2025
+2025-07-16 21:07:30,082 - INFO - Found C:\Users\johnb\Code\Roguelike\src\game.py, last modified: Wed Jul 16 21:07:20 2025
+2025-07-16 21:07:30,083 - INFO - Found C:\Users\johnb\Code\Roguelike\src\player.py, last modified: Wed Jul 16 20:30:01 2025
+2025-07-16 21:07:30,083 - INFO - Found C:\Users\johnb\Code\Roguelike\src\world.py, last modified: Wed Jul 16 20:30:34 2025
+2025-07-16 21:07:30,083 - INFO - Found C:\Users\johnb\Code\Roguelike\src\entities.py, last modified: Wed Jul 16 20:30:44 2025
+2025-07-16 21:07:30,083 - INFO - Found C:\Users\johnb\Code\Roguelike\src\ui.py, last modified: Wed Jul 16 21:07:26 2025
+2025-07-16 21:07:30,083 - INFO - Found C:\Users\johnb\Code\Roguelike\src\sprites.py, last modified: Tue Jul 15 03:12:52 2025
+2025-07-16 21:07:30,084 - INFO - Found C:\Users\johnb\Code\Roguelike\data\upgrades.json, last modified: Wed Jul 16 15:24:05 2025
+2025-07-16 21:07:30,084 - INFO - Found C:\Users\johnb\Code\Roguelike\data\ores.json, last modified: Wed Jul 16 16:27:42 2025
+2025-07-16 21:07:30,084 - INFO - Found C:\Users\johnb\Code\Roguelike\assets\mining.wav, last modified: Wed Jul 16 14:45:29 2025
+2025-07-16 21:07:30,105 - INFO - Starting game loop
