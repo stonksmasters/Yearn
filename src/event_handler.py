@@ -19,11 +19,13 @@ class EventHandler:
     def process_events(self):
         """Process all Pygame events and delegate to appropriate game methods."""
         for event in pygame.event.get():
+            logger.debug(f"Processing event: type={event.type}, key={getattr(event, 'key', 'N/A')}, unicode={getattr(event, 'unicode', 'N/A')}")
             if event.type == pygame.QUIT:
                 self.game.save_and_quit()
                 logger.info("Quit event triggered")
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if not any([self.game.ui.show_start_menu, self.game.ui.show_pause_menu,
+                if not any([self.game.ui.show_start_menu, self.game.ui.show_mode_menu,
+                            self.game.ui.show_lobby_menu, self.game.ui.show_pause_menu,
                             self.game.ui.show_upgrade_menu, self.game.ui.game_over,
                             self.game.ui.show_post_day_upgrades, self.game.ui.show_inventory]):
                     self.game.handle_mining(event.pos)
@@ -41,11 +43,21 @@ class EventHandler:
         if self.game.ui.show_start_menu:
             action = self.game.ui.handle_start_input(event)
             if action == "start":
-                self.game.start_game()
-                logger.info("Game started from start menu")
+                self.game.state_manager.set_state("mode_menu", self.game)
+                logger.info("Transitioned to mode selection menu")
             elif action == "quit":
-                self.game.quit()
+                self.game.save_and_quit()
                 logger.info("Game quit from start menu")
+            return
+        if self.game.ui.show_mode_menu:
+            action = self.game.ui.handle_mode_input(event, self.game)
+            if action == "start":
+                if self.game.mode != "online_coop":
+                    self.game.state_manager.set_state("playing", self.game)
+                    logger.info(f"Started game in {self.game.mode} mode")
+            return
+        if self.game.ui.show_lobby_menu:
+            self.game.ui.handle_lobby_input(event, self.game)
             return
         if self.game.ui.show_pause_menu:
             action = self.game.ui.handle_pause_input(event)
@@ -56,7 +68,7 @@ class EventHandler:
                 self.game.setup()
                 logger.info("Game restarted from pause menu")
             elif action == "quit":
-                self.game.quit()
+                self.game.save_and_quit()
                 logger.info("Game quit from pause menu")
             return
         if self.game.ui.game_over:
@@ -104,19 +116,23 @@ class EventHandler:
                         logger.debug(f"Selected shop item index: {self.game.ui.selected_upgrade}, offset: {self.game.ui.shop_offset}")
             elif event.key == pygame.K_RETURN:
                 self.game.purchase_upgrade()
+                logger.debug("Attempted to purchase upgrade")
             return
         if self.game.ui.show_inventory:
             if event.key == pygame.K_ESCAPE:
                 self.game.ui.show_inventory = False
                 logger.debug("Closed inventory menu")
             elif event.key == pygame.K_UP:
+                item_list = list(self.game.players[0].inventory.items())
                 self.game.ui.selected_item = max(0, self.game.ui.selected_item - 1)
                 logger.debug(f"Selected inventory item index: {self.game.ui.selected_item}")
             elif event.key == pygame.K_DOWN:
-                self.game.ui.selected_item = min(len(self.game.players[0].inventory) - 1, self.game.ui.selected_item + 1)
+                item_list = list(self.game.players[0].inventory.items())
+                self.game.ui.selected_item = min(len(item_list) - 1, self.game.ui.selected_item + 1) if item_list else 0
                 logger.debug(f"Selected inventory item index: {self.game.ui.selected_item}")
             elif event.key == pygame.K_RETURN:
                 self.game.use_inventory_item()
+                logger.debug("Used selected inventory item")
             return
 
         # Gameplay controls

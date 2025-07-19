@@ -17,12 +17,16 @@ class UI:
         """Initialize the UI with font and menu states."""
         self.font = font
         self.show_start_menu = True
+        self.show_mode_menu = False
+        self.show_lobby_menu = False
         self.show_pause_menu = False
         self.show_upgrade_menu = False
         self.show_post_day_upgrades = False
         self.show_inventory = False
         self.game_over = False
         self.selected_start_option = 0
+        self.selected_mode_option = 0
+        self.selected_lobby_option = 0
         self.selected_pause_option = 0
         self.selected_upgrade = 0
         self.selected_post_day_upgrade = 0
@@ -30,8 +34,13 @@ class UI:
         self.menu_mode = "pickaxes"
         self.shop_offset = 0
         self.post_day_upgrades = []
+        self.lobby_code_input = ""
+        self.lobby_message = None
+        self.lobby_message_timer = 0.0
         # Cache static text surfaces
         self.start_menu_title = self.font.render("COAL LLC - ULTIMATE MINER", True, PLAYER_COLOR)
+        self.mode_menu_title = self.font.render("SELECT GAME MODE", True, PLAYER_COLOR)
+        self.lobby_menu_title = self.font.render("LOBBY", True, PLAYER_COLOR)
         self.pause_menu_title = self.font.render("PAUSED", True, PLAYER_COLOR)
         self.inventory_title = self.font.render("INVENTORY", True, PLAYER_COLOR)
         self.upgrade_menu_title = self.font.render("CHOOSE A BONUS UPGRADE", True, PLAYER_COLOR)
@@ -41,6 +50,12 @@ class UI:
         """Draw the UI elements based on the game state."""
         if self.show_start_menu:
             self.draw_start_menu(screen)
+            return
+        if self.show_mode_menu:
+            self.draw_mode_menu(screen)
+            return
+        if self.show_lobby_menu:
+            self.draw_lobby_menu(screen)
             return
         if self.show_pause_menu:
             self.draw_pause_menu(screen)
@@ -58,7 +73,7 @@ class UI:
         upgrades_cfg = getattr(game, 'upgrades_cfg', {'pickaxes': [], 'shop': []})
 
         # Draw HUD
-        time_left = max(0, DAY_DURATION + player.day_extension - (time.time() - day_start_time))
+        time_left = max(0, DAY_DURATION + player.day_extension - (time.time() - day_start_time)) if game.mode != "online_coop" else game.time_left
         minutes = int(time_left // 60)
         seconds = int(time_left % 60)
         health_percent = player.health / player.max_health
@@ -82,7 +97,8 @@ class UI:
             f"Health: {int(player.health)}/{player.max_health}",
             f"Inventory: D:{player.inventory.get('dynamite', 0)} H:{player.inventory.get('health_pack', 0)} "
             f"E:{player.inventory.get('earthquake', 0)} F:{player.inventory.get('depth_charge', 0)} "
-            f"B:{player.inventory.get('bat_wing', 0)} G:{player.inventory.get('goblin_tooth', 0)}"
+            f"B:{player.inventory.get('bat_wing', 0)} G:{player.inventory.get('goblin_tooth', 0)}",
+            f"Mode: {game.mode.replace('_', ' ').title() if game.mode else 'Not Selected'}"
         ]
 
         for i, line in enumerate(ui_lines):
@@ -111,9 +127,14 @@ class UI:
             if effect_data.get('active', False):
                 effect_time_left = effect_data.get('end_time', time.time()) - time.time()
                 if effect_time_left > 0:
-                    text = f"{effect_name.capitalize()}: {int(effect_time_left)}s"
+                    text = f"{effect_name.replace('_', ' ').title()}: {int(effect_time_left)}s"
                     screen.blit(self.font.render(text, True, (0, 255, 255)), (WIDTH - 200, effect_y))
                     effect_y -= 20
+
+        # Draw lobby message
+        if self.lobby_message and self.lobby_message_timer > 0:
+            lobby_surf = self.font.render(self.lobby_message, True, (255, 100, 100))
+            screen.blit(lobby_surf, (WIDTH // 2 - lobby_surf.get_width() // 2, HEIGHT - 200))
 
         # Draw inventory
         if self.show_inventory:
@@ -127,7 +148,8 @@ class UI:
                 item_info = next((item for item in upgrades_cfg.get('shop', []) if item['id'] == item_id), 
                                  {'name': item_id.replace('_', ' ').title(), 'description': 'No description'})
                 text = f"{item_info['name']}: {count} - {item_info['description']}"
-                text_surf = self.font.render(text, True, WHITE)
+                color = PLAYER_COLOR if i == self.selected_item else WHITE
+                text_surf = self.font.render(text, True, color)
                 screen.blit(text_surf, (WIDTH // 2 - text_surf.get_width() // 2, y_offset))
                 if i == self.selected_item:
                     pygame.draw.rect(screen, PLAYER_COLOR, (WIDTH // 2 - 180, y_offset - 5, 360, 30), 2)
@@ -242,13 +264,17 @@ class UI:
             debug_surf = self.font.render(debug_message, True, WHITE)
             screen.blit(debug_surf, (WIDTH // 2 - debug_surf.get_width() // 2, HEIGHT - 50))
 
+        # Update lobby message timer
+        if self.lobby_message_timer > 0:
+            self.lobby_message_timer -= 1 / 60  # Assuming 60 FPS
+            if self.lobby_message_timer <= 0:
+                self.lobby_message = None
+
         logger.debug("Rendered UI elements")
 
     def draw_start_menu(self, screen):
         """Draw the start menu."""
-        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
-        screen.blit(overlay, (0, 0))
+        screen.fill((0, 0, 0))
         screen.blit(self.start_menu_title, (WIDTH // 2 - self.start_menu_title.get_width() // 2, HEIGHT // 4))
         options = ["Start Game", "Quit"]
         for i, option in enumerate(options):
@@ -262,11 +288,49 @@ class UI:
             inst_surf = self.font.render(line, True, (200, 200, 100))
             screen.blit(inst_surf, (WIDTH // 2 - inst_surf.get_width() // 2, HEIGHT - 100 + j * 30))
 
+    def draw_mode_menu(self, screen):
+        """Draw the game mode selection menu."""
+        screen.fill((0, 0, 0))
+        screen.blit(self.mode_menu_title, (WIDTH // 2 - self.mode_menu_title.get_width() // 2, HEIGHT // 4))
+        options = ["Singleplayer", "Local Co-op", "Online Co-op"]
+        for i, option in enumerate(options):
+            color = PLAYER_COLOR if i == self.selected_mode_option else WHITE
+            text_surf = self.font.render(option, True, color)
+            screen.blit(text_surf, (WIDTH // 2 - text_surf.get_width() // 2, HEIGHT // 2 + i * 40))
+            if i == self.selected_mode_option:
+                pygame.draw.rect(screen, PLAYER_COLOR, (WIDTH // 2 - 100, HEIGHT // 2 + i * 40 - 5, 200, 30), 2)
+        instructions = ["↑/↓: Navigate  ENTER: Select  ESC: Back"]
+        for j, line in enumerate(instructions):
+            inst_surf = self.font.render(line, True, (200, 200, 100))
+            screen.blit(inst_surf, (WIDTH // 2 - inst_surf.get_width() // 2, HEIGHT - 100 + j * 30))
+
+    def draw_lobby_menu(self, screen):
+        """Draw the lobby menu for online co-op."""
+        screen.fill((0, 0, 0))
+        screen.blit(self.lobby_menu_title, (WIDTH // 2 - self.lobby_menu_title.get_width() // 2, HEIGHT // 4))
+        options = ["Create Lobby", "Join Lobby"]
+        for i, option in enumerate(options):
+            color = PLAYER_COLOR if i == self.selected_lobby_option else WHITE
+            text_surf = self.font.render(option, True, color)
+            screen.blit(text_surf, (WIDTH // 2 - text_surf.get_width() // 2, HEIGHT // 2 + i * 40))
+            if i == self.selected_lobby_option:
+                pygame.draw.rect(screen, PLAYER_COLOR, (WIDTH // 2 - 100, HEIGHT // 2 + i * 40 - 5, 200, 30), 2)
+        if self.selected_lobby_option == 1:
+            lobby_code_text = f"Lobby Code: {self.lobby_code_input or '____'}"
+            text_surf = self.font.render(lobby_code_text, True, WHITE)
+            screen.blit(text_surf, (WIDTH // 2 - text_surf.get_width() // 2, HEIGHT // 2 + 100))
+            pygame.draw.rect(screen, PLAYER_COLOR, (WIDTH // 2 - 100, HEIGHT // 2 + 95, 200, 30), 2)
+        if self.lobby_message and self.lobby_message_timer > 0:
+            lobby_surf = self.font.render(self.lobby_message, True, (255, 100, 100))
+            screen.blit(lobby_surf, (WIDTH // 2 - lobby_surf.get_width() // 2, HEIGHT // 2 + 140))
+        instructions = ["↑/↓: Navigate  ENTER: Select  ESC: Back", "A-Z/0-9: Enter Code (Join)"]
+        for j, line in enumerate(instructions):
+            inst_surf = self.font.render(line, True, (200, 200, 100))
+            screen.blit(inst_surf, (WIDTH // 2 - inst_surf.get_width() // 2, HEIGHT - 100 + j * 30))
+
     def draw_pause_menu(self, screen):
         """Draw the pause menu."""
-        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
-        screen.blit(overlay, (0, 0))
+        screen.fill((0, 0, 0))
         screen.blit(self.pause_menu_title, (WIDTH // 2 - self.pause_menu_title.get_width() // 2, HEIGHT // 4))
         options = ["Resume", "Restart", "Quit"]
         for i, option in enumerate(options):
@@ -292,11 +356,83 @@ class UI:
             elif event.key == pygame.K_RETURN:
                 if self.selected_start_option == 0:
                     self.show_start_menu = False
-                    logger.info("Started game from start menu")
+                    self.show_mode_menu = True
+                    logger.info("Entered mode selection from start menu")
                     return "start"
                 elif self.selected_start_option == 1:
                     logger.info("Quit game from start menu")
                     return "quit"
+        return None
+
+    def handle_mode_input(self, event, game):
+        """Handle input for the mode selection menu."""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.show_mode_menu = False
+                self.show_start_menu = True
+                self.selected_mode_option = 0
+                logger.debug("Returned to start menu from mode menu")
+                return None
+            elif event.key == pygame.K_UP:
+                self.selected_mode_option = max(0, self.selected_mode_option - 1)
+                logger.debug(f"Selected mode option: {['Singleplayer', 'Local Co-op', 'Online Co-op'][self.selected_mode_option]}")
+            elif event.key == pygame.K_DOWN:
+                self.selected_mode_option = min(2, self.selected_mode_option + 1)
+                logger.debug(f"Selected mode option: {['Singleplayer', 'Local Co-op', 'Online Co-op'][self.selected_mode_option]}")
+            elif event.key == pygame.K_RETURN:
+                modes = ["singleplayer", "local_coop", "online_coop"]
+                game.mode = modes[self.selected_mode_option]
+                logger.info(f"Selected {game.mode} mode")
+                self.show_mode_menu = False
+                if game.mode == "online_coop":
+                    self.show_lobby_menu = True
+                    self.lobby_code_input = ""
+                    self.selected_lobby_option = 0
+                    logger.debug("Transitioned to lobby menu for online co-op")
+                else:
+                    game.start_game()
+                    logger.debug(f"Started game in {game.mode} mode")
+                return "start"
+        return None
+
+    def handle_lobby_input(self, event, game):
+        """Handle input for the lobby menu."""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.show_lobby_menu = False
+                self.show_mode_menu = True
+                self.lobby_code_input = ""
+                self.selected_lobby_option = 0
+                logger.debug("Returned to mode menu from lobby menu")
+                return None
+            elif event.key == pygame.K_UP:
+                self.selected_lobby_option = (self.selected_lobby_option - 1) % 2
+                logger.debug(f"Selected lobby option: {self.selected_lobby_option}")
+            elif event.key == pygame.K_DOWN:
+                self.selected_lobby_option = (self.selected_lobby_option + 1) % 2
+                logger.debug(f"Selected lobby option: {self.selected_lobby_option}")
+            elif event.key == pygame.K_RETURN:
+                if self.selected_lobby_option == 0:
+                    game.create_lobby()
+                    logger.info("Requested lobby creation")
+                    return None
+                elif self.selected_lobby_option == 1:
+                    if len(self.lobby_code_input) == 4:
+                        game.join_lobby(self.lobby_code_input)
+                        logger.info(f"Requested to join lobby {self.lobby_code_input}")
+                        return None
+                    else:
+                        self.lobby_message = "Enter a 4-digit lobby code"
+                        self.lobby_message_timer = 2.0
+                        logger.debug("Invalid lobby code length")
+            elif self.selected_lobby_option == 1 and len(self.lobby_code_input) < 4:
+                char = event.unicode.upper()
+                if char.isalnum():
+                    self.lobby_code_input += char
+                    logger.debug(f"Lobby code input: {self.lobby_code_input}")
+                elif event.key == pygame.K_BACKSPACE:
+                    self.lobby_code_input = self.lobby_code_input[:-1]
+                    logger.debug(f"Lobby code input: {self.lobby_code_input}")
         return None
 
     def handle_pause_input(self, event):
@@ -334,26 +470,26 @@ class UI:
                 logger.debug("Skipped post-day upgrade selection")
                 return True
             elif event.key == pygame.K_UP:
-                self.selected_post_day_upgrade = (self.selected_post_day_upgrade - 1) % len(self.post_day_upgrades)
-                logger.debug(f"Selected post-day upgrade: {self.selected_post_day_upgrade}")
+                if self.post_day_upgrades:
+                    self.selected_post_day_upgrade = (self.selected_post_day_upgrade - 1) % len(self.post_day_upgrades)
+                    logger.debug(f"Selected post-day upgrade: {self.selected_post_day_upgrade}")
             elif event.key == pygame.K_DOWN:
-                self.selected_post_day_upgrade = (self.selected_post_day_upgrade + 1) % len(self.post_day_upgrades)
-                logger.debug(f"Selected post-day upgrade: {self.selected_post_day_upgrade}")
+                if self.post_day_upgrades:
+                    self.selected_post_day_upgrade = (self.selected_post_day_upgrade + 1) % len(self.post_day_upgrades)
+                    logger.debug(f"Selected post-day upgrade: {self.selected_post_day_upgrade}")
             elif event.key == pygame.K_RETURN:
-                selected_upgrade = self.post_day_upgrades[self.selected_post_day_upgrade]
-                self.apply_upgrade(selected_upgrade, player)
-                self.show_post_day_upgrades = False
-                logger.info(f"Selected post-day upgrade: {selected_upgrade['name']}")
-                return True
+                if self.post_day_upgrades and 0 <= self.selected_post_day_upgrade < len(self.post_day_upgrades):
+                    selected_upgrade = self.post_day_upgrades[self.selected_post_day_upgrade]
+                    self.apply_upgrade(selected_upgrade, player)
+                    self.show_post_day_upgrades = False
+                    logger.info(f"Selected post-day upgrade: {selected_upgrade['name']}")
+                    return True
         return False
 
     def select_post_day_upgrades(self, upgrades_cfg):
         """Select up to three random shop upgrades for post-day selection."""
         shop_upgrades = [item for item in upgrades_cfg.get("shop", []) if not (item.get('unlocked', False) and item.get('permanent', False))]
-        if len(shop_upgrades) >= 3:
-            self.post_day_upgrades = random.sample(shop_upgrades, 3)
-        else:
-            self.post_day_upgrades = shop_upgrades[:]
+        self.post_day_upgrades = random.sample(shop_upgrades, min(3, len(shop_upgrades))) if shop_upgrades else []
         self.selected_post_day_upgrade = 0
         logger.debug(f"Selected {len(self.post_day_upgrades)} post-day upgrades")
 

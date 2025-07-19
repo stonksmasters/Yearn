@@ -84,9 +84,10 @@ class Renderer:
             for entity in group:
                 entity.draw(self.screen, camera_x, camera_y)
 
-    def draw_players(self, players, camera_x, camera_y):
-        """Draw players with camera offset."""
-        for i, player in enumerate(players):
+    def draw_players(self, local_players, remote_players, camera_x, camera_y):
+        """Draw both local and remote players with camera offset."""
+        # Draw local players
+        for i, player in enumerate(local_players):
             screen_x = player.rect.x - camera_x
             screen_y = player.rect.y - camera_y
             color = self.settings.PLAYER_COLOR if i == 0 else self.settings.PLAYER2_COLOR
@@ -95,6 +96,28 @@ class Renderer:
                 color,
                 (screen_x, screen_y, player.rect.width, player.rect.height)
             )
+            # Draw health bar
+            health_width = (player.health / player.max_health) * player.rect.width
+            pygame.draw.rect(self.screen, (255, 0, 0), (screen_x, screen_y - 10, player.rect.width, 5))  # Red background
+            pygame.draw.rect(self.screen, (0, 255, 0), (screen_x, screen_y - 10, health_width, 5))  # Green fill
+            pygame.draw.rect(self.screen, self.settings.WHITE, (screen_x, screen_y - 10, player.rect.width, 5), 1)  # White border
+
+        # Draw remote players
+        for remote_player in remote_players.values():
+            screen_x = remote_player.x - camera_x
+            screen_y = remote_player.y - camera_y
+            pygame.draw.rect(
+                self.screen,
+                (0, 255, 0),  # Green for remote players
+                (screen_x, screen_y, remote_player.rect.width, remote_player.rect.height)
+            )
+            # Draw health bar for remote players
+            health_width = (remote_player.health / 100) * remote_player.rect.width  # Assuming max health of 100
+            pygame.draw.rect(self.screen, (255, 0, 0), (screen_x, screen_y - 10, remote_player.rect.width, 5))  # Red background
+            pygame.draw.rect(self.screen, (0, 255, 0), (screen_x, screen_y - 10, health_width, 5))  # Green fill
+            pygame.draw.rect(self.screen, self.settings.WHITE, (screen_x, screen_y - 10, remote_player.rect.width, 5), 1)  # White border
+
+        logger.debug("Rendered local and remote players")
 
     def draw_ore_scanner(self, ore_scanner, camera_x, camera_y):
         """Draw the ore scanner effect."""

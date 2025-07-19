@@ -3,7 +3,6 @@ import random
 import math
 import time
 import logging
-import settings
 from settings import WIDTH, HEIGHT, TILE_SIZE, NUM_COLS, MAX_DEPTH, ENEMY_DROPS
 
 # Configure logging (Pyodide-compatible)
@@ -51,7 +50,7 @@ class Particle:
             screen.blit(surf, (self.x - camera_x, self.y - camera_y))
 
 class OreItem:
-    def __init__(self, x, y, ore_type, value, ores_cfg, is_artifact=False):
+    def __init__(self, x, y, ore_type, value, ores_cfg, is_artifact=False, entity_id=None):
         self.rect = pygame.Rect(x, y, TILE_SIZE // 2, TILE_SIZE // 2)
         self.ore_type = ore_type
         self.base_value = value  # Base value from ores_cfg, no multipliers
@@ -69,7 +68,7 @@ class OreItem:
         self.target_player = None  # Player to move toward during collection
         self.collect_speed = 200  # Pixels per second for collection animation
         self.collect_timer = 0.5  # Duration of collection animation
-        self.id = id(self)  # Unique ID for debugging
+        self.id = entity_id if entity_id else f"ore_{id(self)}"  # Use server-provided ID or local fallback
         logger.debug(f"Spawned OreItem {self.id}: {ore_type} at ({x}, {y}), base_value=${value:.2f}")
 
     def update(self, dt, game):
@@ -77,6 +76,31 @@ class OreItem:
             logger.debug(f"OreItem {self.id} already collected, marking for removal")
             return True, None  # Already collected, mark for removal
 
+        if game.mode == "online_coop":
+            # In online co-op, collection is handled by server via messages
+            # Only update position for visual consistency
+            self.float_timer += dt
+            self.pulse_timer += dt
+            self.rotation += dt * 2
+            self.rect.y += math.sin(self.float_timer * 3) * 10 * dt
+            if self.collecting and self.target_player:
+                dx = self.target_player.rect.centerx - self.rect.centerx
+                dy = self.target_player.rect.centery - self.rect.centery
+                distance = math.sqrt(dx**2 + dy**2)
+                if distance > 0:
+                    speed = self.collect_speed
+                    self.vx = (dx / distance) * speed
+                    self.vy = (dy / distance) * speed
+                    self.rect.x += self.vx * dt
+                    self.rect.y += self.vy * dt
+                self.collect_timer -= dt
+                if distance < 10 or self.collect_timer <= 0:
+                    self.collected = True  # Mark as collected, expect server to handle logic
+                    logger.debug(f"OreItem {self.id} reached target or timer expired in online_coop, marked collected")
+                    return True, self.target_player
+            return False, None
+
+        # Singleplayer and local co-op collection logic
         if self.collecting and self.target_player:
             # Move toward target player
             dx = self.target_player.rect.centerx - self.rect.centerx
@@ -90,8 +114,7 @@ class OreItem:
                 self.rect.y += self.vy * dt
             self.collect_timer -= dt
             if distance < 10 or self.collect_timer <= 0:
-                # Collect when close to player or timer expires
-                depth_zone = game.world.get_depth_zone(int(self.rect.centery // settings.TILE_SIZE))
+                depth_zone = game.world.get_depth_zone(int(self.rect.centery // TILE_SIZE))
                 value_per_unit = self.base_value
                 total_value = self.base_value * depth_zone["value_scale"]
                 if self.is_artifact or self.ore_type == "diamond":
@@ -102,11 +125,14 @@ class OreItem:
                 ore_pos = (self.rect.x, self.rect.y)
                 if self.target_player.add_ore(self.ore_type, value_per_unit, 1, ore_pos):
                     self.collected = True
+                    game.cash_earned_today += total_value
+                    self.target_player.quota_buffer += total_value
                     logger.debug(f"Collected OreItem {self.id}: {self.ore_type} into inventory, value_per_unit=${value_per_unit:.2f}, total_value=${total_value:.2f}, pos={ore_pos}")
                     return True, self.target_player
                 else:
                     self.target_player.cash += total_value
                     game.cash_earned_today += total_value
+                    self.target_player.quota_buffer += total_value
                     if self.is_artifact:
                         self.target_player.artifacts = getattr(self.target_player, 'artifacts', 0) + 1
                     self.collected = True
@@ -156,28 +182,26 @@ class OreItem:
                     self.rect.left = block.right
                     self.vx = -self.vx * 0.5
         for player in game.players:
-            if self.life <= 0 or (time.time() - self.creation_time > 0.5 and self.rect.colliderect(player.rect)):
-                depth_zone = game.world.get_depth_zone(int(self.rect.centery // settings.TILE_SIZE))
-                value_per_unit = self.base_value
-                total_value = self.base_value * depth_zone["value_scale"]
-                if self.is_artifact or self.ore_type == "diamond":
-                    total_value *= 2
-                if player.lucky_miner and random.random() < 0.1:
-                    total_value *= 2
-                total_value *= player.cash_multiplier * game.bonus_multiplier
-                ore_pos = (self.rect.x, self.rect.y)
-                if player.add_ore(self.ore_type, value_per_unit, 1, ore_pos):
-                    self.collected = True
-                    logger.debug(f"Collected OreItem {self.id}: {self.ore_type} into inventory, value_per_unit=${value_per_unit:.2f}, total_value=${total_value:.2f}, pos={ore_pos}")
-                    return True, player
+            dx = player.rect.centerx - self.rect.centerx
+            dy = player.rect.centery - self.rect.centery
+            distance = math.sqrt(dx**2 + dy**2)
+            pickup_range = 3 * TILE_SIZE * player.ore_pickup_range
+            if (self.life <= 0 or (time.time() - self.creation_time > 0.5 and distance <= pickup_range)) and not self.collecting:
+                self.collecting = True
+                self.target_player = player
+                self.collect_timer = 0.5
+                if game.mode == "online_coop" and game.websocket:
+                    try:
+                        asyncio.create_task(game.websocket.send(json.dumps({
+                            "action": "collect_ore",
+                            "ore_id": self.id,
+                            "player_id": game.player_id
+                        })))
+                        logger.debug(f"Sent collect_ore for OreItem {self.id} in online_coop")
+                    except Exception as e:
+                        logger.error(f"Failed to send collect_ore for OreItem {self.id}: {e}")
                 else:
-                    player.cash += total_value
-                    game.cash_earned_today += total_value
-                    if self.is_artifact:
-                        player.artifacts = getattr(player, 'artifacts', 0) + 1
-                    self.collected = True
-                    logger.debug(f"Inventory full for OreItem {self.id}, added ${total_value:.2f} to cash for {self.ore_type}, pos={ore_pos}")
-                    return True, player
+                    logger.debug(f"Started collection of OreItem {self.id} by player at ({player.rect.centerx}, {player.rect.centery})")
         return False, None
 
     def draw(self, screen, camera_x, camera_y):
@@ -307,6 +331,7 @@ class Enemy:
         self.active = True
         self.dropped_items = []
         self.stolen_cash = 0
+        logger.debug(f"Enemy {enemy_type} spawned at ({x}, {y})")
 
     def update(self, dt, game):
         if not self.active:
@@ -419,11 +444,6 @@ class EntityManager:
                     logger.debug(f"Removed {type(entity).__name__} (id: {getattr(entity, 'id', 'N/A')}) from {category}")
                 else:
                     logger.warning(f"Attempted to remove {type(entity).__name__} (id: {getattr(entity, 'id', 'N/A')}) from {category}, but it was already removed")
-            # Log remaining collected OreItems
-            if category == "ore_items":
-                collected_items = [e.id for e in self.entities[category] if getattr(e, 'collected', False)]
-                if collected_items:
-                    logger.warning(f"Found {len(collected_items)} OreItems still in list with collected=True: {collected_items}")
             logger.debug(f"Updated {category}, count after: {len(self.entities[category])}")
 
     def draw(self, screen, camera_x, camera_y):
@@ -432,3 +452,13 @@ class EntityManager:
             for entity in self.entities[category]:
                 entity.draw(screen, camera_x, camera_y)
         logger.debug("All entities drawn")
+
+    def remove_ore(self, ore_id):
+        """Remove an ore item by its ID, typically called for server-driven collection."""
+        for ore in self.entities["ore_items"]:
+            if ore.id == ore_id:
+                ore.collected = True
+                self.entities["ore_items"].remove(ore)
+                logger.debug(f"Removed OreItem {ore_id} via remove_ore")
+                return
+        logger.warning(f"OreItem {ore_id} not found for removal")
